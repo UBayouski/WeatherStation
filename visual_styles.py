@@ -10,24 +10,22 @@ class VisualStyle(object):
         self._p = positive_color
         self._n = negative_color
 
-    @abstractproperty
-    def default_style(self):
-        pass
-
-    @abstractmethod
-    def show(self, value=0):
-        pass
-
     @property
     def rotation(self):
         return 0
+
+    @abstractmethod
+    def apply_style(self, value):
+        pass
 
 class ArrowStyle(VisualStyle):
 
     def __init__(self, positive_color, negative_color):
         super(ArrowStyle, self).__init__(positive_color, negative_color)
 
-        self._arrow = (
+        self._previous_value = 0
+
+        self._arrow_up = (
             self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e, #0
             self._e, self._e, self._p, self._p, self._p, self._p, self._e, self._e, #1
             self._e, self._p, self._e, self._p, self._p, self._e, self._p, self._e, #2
@@ -37,6 +35,8 @@ class ArrowStyle(VisualStyle):
             self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e, #6
             self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e  #7
         )
+
+        self._arrow_down = tuple(self._n if pixel is self._p else self._e for pixel in self._arrow_up[::-1])
 
         self._equals = (
             self._e, self._e, self._e, self._e, self._e, self._e, self._e, self._e, #0
@@ -48,16 +48,16 @@ class ArrowStyle(VisualStyle):
             self._e, self._e, self._e, self._e, self._e, self._e, self._e, self._e, #6
             self._e, self._e, self._e, self._e, self._e, self._e, self._e, self._e, #7
         )
-
-    @property
-    def default_style(self):
-        return self._equals
     
-    def show(self, value=0):
-        if value > 0:
-            return self._arrow
+    def apply_style(self, value):
+        new_value = value
+        new_value -= self._previous_value
+        self._previous_value = value
 
-        return tuple(self._n if pixel is self._p else self._e for pixel in self._arrow[::-1])
+        if not new_value:
+            return self._equals
+
+        return self._arrow_up if new_value > 0 else self._arrow_down
 
 class NumericStyle(VisualStyle):
     
@@ -120,14 +120,10 @@ class NumericStyle(VisualStyle):
         }
 
     @property
-    def default_style(self):
-        return show(0)
-
-    @property
     def rotation(self):
         return 90
 
-    def show(self, value=0):
+    def apply_style(self, value):
         str_value = str(abs(int(value)))
 
         if len(str_value) == 2:
@@ -149,11 +145,7 @@ class SquareStyle(VisualStyle):
     def __init__(self, positive_color, negative_color):
         super(SquareStyle, self).__init__(positive_color, negative_color)
 
-    @property
-    def default_style(self):
-        return show()
-
-    def show(self, value=0):
+    def apply_style(self, value):
         if value > 0:
             return tuple(self._p if i < value else self._n for i in range(64))
 

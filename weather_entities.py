@@ -35,6 +35,8 @@ class CarouselContainer(object):
     def current_item(self):
         return self.carousel_items[self.current_index]
 
+class WeatherEntityType(object):
+    HUMIDITY, PRESSURE, TEMPERATURE = range(3)
 
 class WeatherEntity(CarouselContainer):
     __metaclass__ = ABCMeta
@@ -42,13 +44,11 @@ class WeatherEntity(CarouselContainer):
     def __init__(self):
         super(WeatherEntity, self).__init__()
 
-    def __init__(self):
         self._visual_styles = (
-            ArrowStyle(self.positive_color, self.negative_color), 
-            NumericStyle(self.positive_color, self.negative_color), 
+            NumericStyle(self.positive_color, self.negative_color),
+            ArrowStyle(self.positive_color, self.negative_color),
             SquareStyle(self.positive_color, self.negative_color)
         )
-        self._current_style_index = 0
 
     @abstractproperty
     def entity_messsage(self):
@@ -62,34 +62,26 @@ class WeatherEntity(CarouselContainer):
     def negative_color(self):
         pass
 
+    @abstractproperty
+    def entity_type(self):
+        pass
+
     @property
     def carousel_items(self):
         return self._visual_styles
-   
-    @property
-    def next_style(self):
-        if self._current_style_index < len(self._visual_styles) - 1:
-            self._current_style_index += 1
-        else:
-            self._current_style_index = 0
-            
-        return self.current_style
-
-    @property
-    def previous_style(self):
-        if self._current_style_index > 0:
-            self._current_style_index -= 1
-        else:
-            self._current_style_index = len(self._visual_styles) - 1
-            
-        return self.current_style
 
     @property
     def current_style(self):
-        return self._visual_styles[self._current_style_index]
+        return self.current_item
+
+    def show_pixels(self, value):
+        return self.current_item.apply_style(value)
 
 class HumidityEntity(WeatherEntity):
-    
+
+    def __init__(self):
+        super(HumidityEntity, self).__init__()
+
     @property
     def entity_messsage(self):
         return 'Humidity'
@@ -102,7 +94,20 @@ class HumidityEntity(WeatherEntity):
     def negative_color(self):
         return Config.HUM_NEGATIVE
 
+    @property
+    def entity_type(self):
+        return WeatherEntityType.HUMIDITY
+
+    def show_pixels(self, value):
+        if self.current_style is SquareStyle:
+            value = 64 * value / 100
+
+        return super(HumidityEntity, self).show_pixels(value)
+
 class PressureEntity(WeatherEntity):
+
+    def __init__(self):
+        super(PressureEntity, self).__init__()
     
     @property
     def entity_messsage(self):
@@ -116,7 +121,14 @@ class PressureEntity(WeatherEntity):
     def negative_color(self):
         return Config.PRESS_NEGATIVE
 
+    @property
+    def entity_type(self):
+        return WeatherEntityType.PRESSURE
+
 class TemperatureEntity(WeatherEntity):
+
+    def __init__(self):
+        super(TemperatureEntity, self).__init__()
     
     @property
     def entity_messsage(self):
@@ -128,7 +140,11 @@ class TemperatureEntity(WeatherEntity):
 
     @property
     def negative_color(self):
-        return Config.PRESS_NEGATIVE
+        return Config.TEMP_NEGATIVE
+
+    @property
+    def entity_type(self):
+        return WeatherEntityType.TEMPERATURE
 
 # Predefined weather entities tuple
 DEFAULT_WEATHER_ENTITIES = (TemperatureEntity(), HumidityEntity(), PressureEntity())
