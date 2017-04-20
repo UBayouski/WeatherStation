@@ -119,21 +119,34 @@ class NumericStyle(VisualStyle):
             )
         }
 
+        self._infinity = (
+            self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e,
+            self._e, self._e, self._p, self._e, self._e, self._p, self._e, self._e,
+            self._e, self._e, self._p, self._e, self._e, self._p, self._e, self._e,
+            self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e,
+            self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e,
+            self._e, self._e, self._p, self._e, self._e, self._p, self._e, self._e,
+            self._e, self._e, self._p, self._e, self._e, self._p, self._e, self._e,
+            self._e, self._e, self._e, self._p, self._p, self._e, self._e, self._e,
+        )
+
     @property
     def rotation(self):
         return 90
 
     def apply_style(self, value):
-        str_value = str(abs(int(value)))
+        str_value = str(int(round(abs(value))))
 
         if len(str_value) == 2:
             result = list(self._numbers[str_value[1]]) #0-2
             result += self._empty_line * 2             #3-4
             result += self._numbers[str_value[0]]      #5-7
-        else:
+        elif len(str_value) == 1:
             result = list(self._empty_line * 2)        #0-1
             result += self._numbers[str_value]         #2-4
             result += self._empty_line * 3             #5-7
+        else:
+            result = self._infinity
 
         if value <= 0:
             result = tuple(self._n if pixel is self._p else self._e for pixel in result)

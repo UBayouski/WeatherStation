@@ -1,47 +1,46 @@
 #!/usr/bin/python
 '''*****************************************************************************************************************
-    Raspberry Pi Weather Station
+    Raspberry Pi + Raspbian Weather Station
     By Uladzislau Bayouski
     https://www.linkedin.com/in/uladzislau-bayouski-a7474111b/
 
     A Raspberry Pi based weather station that measures temperature, humidity and pressure using
     the Astro Pi Sense HAT then uploads the data to a Weather Underground weather station. 
-    Completely configurable and working asyncroniously in multi threads.
+    Completely configurable and working asyncroniously in multi threads. 
+    Uses stick for choosing different weather entities and visual styles. 
+    Uses logger to log runtime issues/errors.
 ********************************************************************************************************************'''
 from __future__ import print_function
 from collections import deque
 from sense_hat import SenseHat, ACTION_RELEASED, DIRECTION_UP, DIRECTION_DOWN, DIRECTION_LEFT, DIRECTION_RIGHT
-from signal import pause
-from urllib import urlencode
 from threading import Timer
+from urllib import urlencode
 
 import datetime
 import logging 
 import os
+import signal
 import sys
-import urllib2
 import time
+import urllib2
 
 from config import Config
 from weather_entities import DEFAULT_WEATHER_ENTITIES, CarouselContainer, WeatherEntityType
 
 class WeatherStation(CarouselContainer):
+    """Weather Station controlling class, setups and manages station run time."""
+
     # Constants
     SMOOTH_READINGS_NUMBER = 3
 
-    def __init__(self, sense_hat):
+    def __init__(self):
         super(WeatherStation, self).__init__()
 
-        self._sense_hat = sense_hat
+        self._sense_hat = None
         self._log_timer = None
         self._upload_timer = None
+        self._update_timer = None
         self._last_readings = None
-
-        # Setup Sense Hat joystic
-        self._sense_hat.stick.direction_up = self._change_weather_entity
-        self._sense_hat.stick.direction_down = self._change_weather_entity
-        self._sense_hat.stick.direction_left = self._change_weather_entity
-        self._sense_hat.stick.direction_right = self._change_weather_entity
 
     @property
     def carousel_items(self):
@@ -50,30 +49,56 @@ class WeatherStation(CarouselContainer):
     @property
     def current_style(self):
         return self.current_item.current_style
+
+    def activate_sensors(self):
+        """Activates sensors by requesting first values and assigning handlers."""
+        self._sense_hat = SenseHat()
+
+        # Scroll Init message over HAT screen
+        self._show_message('Init Sensors', (255, 255, 0), (0, 0, 255))
+
+        # Init sensors, to be sure first effective run uses correct sensors values
+        self._sense_hat.get_humidity()
+        self._sense_hat.get_pressure()
+
+        # Setup Sense Hat stick
+        self._sense_hat.stick.direction_up = self._change_weather_entity
+        self._sense_hat.stick.direction_down = self._change_weather_entity
+        self._sense_hat.stick.direction_left = self._change_weather_entity
+        self._sense_hat.stick.direction_right = self._change_weather_entity
     
     def start_station(self):
+        """Launches multiple threads to handle configured behavior."""
         if Config.LOG_TO_CONSOLE and Config.LOG_INTERVAL:
-            self._log_results()
+            self._log_results(first_time=True)
 
-        if Config.UPLOAD_INTERVAL:
-            self._upload_results()
+        if Config.WEATHER_UPLOAD and Config.UPLOAD_INTERVAL:
+            self._upload_results(first_time=True)
+
+        if Config.UPDATE_DISPLAY and Config.UPDATE_INTERVAL:
+            self._update_display()
 
     def stop_station(self):
+        """Tries to stop active threads and clean up screen."""
+        if self._sense_hat:
+            self._sense_hat.clear()
+
         if self._log_timer:
             self._log_timer.cancel()
 
         if self._upload_timer:
             self._upload_timer.cancel()
 
-        if self._sense_hat:
-            self._sense_hat.clear()
+        if self._update_timer:
+            self._update_timer.cancel()
 
     @staticmethod
     def to_fahrenheit(value):
-        """Converts celsius temperature to fahrenheit"""
+        """Converts celsius temperature to fahrenheit."""
         return (value * 1.8) + 32
 
     def get_temperature(self):
+        """"""
         # ====================================================================
         # Unfortunately, getting an accurate temperature reading from the
         # Sense HAT is improbable, see here:
@@ -87,7 +112,7 @@ class WeatherStation(CarouselContainer):
         t1 = self._sense_hat.get_temperature_from_humidity()
         t2 = self._sense_hat.get_temperature_from_pressure()
         # t becomes the average of the temperatures from both sensors
-        t = (t1 + t2) / 2
+        t = (t1 + t2) / 2 if  t2 else t1
         # Now, grab the CPU temperature
         t_cpu = self._get_cpu_temp()
         # Calculate the 'real' temperature compensating for CPU heating
@@ -99,33 +124,69 @@ class WeatherStation(CarouselContainer):
         return t_corr
 
     def get_humidity(self):
+        """Gets humidity sensor value."""
         return self._sense_hat.get_humidity()
 
     def get_pressure(self):
-        # convert pressure from millibars to inHg before posting
+        """
+        Gets humidity sensor value and converts pressure from millibars to inHg before posting.
+        """
         return self._sense_hat.get_pressure() * 0.0295300
 
     def _change_weather_entity(self, event):
+        """Switches to next/previous weather entity or next/previous visual style."""
+        
+        # We need to handle release event state
         if event.action == ACTION_RELEASED:
-            sensors_data = self._get_sensors_data()
             self._sense_hat.clear()
 
             if event.direction == DIRECTION_UP:
-                self._show_message(self.next_item.entity_messsage)
+                next_entity = self.next_item
+                self._show_message(next_entity.entity_messsage, next_entity.positive_color)
             elif event.direction == DIRECTION_DOWN:
-                self._show_message(self.previous_item.entity_messsage)
+                previous_entity = self.previous_item
+                self._show_message(previous_entity.entity_messsage, previous_entity.positive_color)
             elif event.direction == DIRECTION_LEFT:
                 self.current_item.previous_item
             else:
                 self.current_item.next_item
 
-            self._update_display(sensors_data)
+            self._update_display(loop=False)
 
-    def _show_message(self, message):
+    def _show_message(self, message, message_color, background_color=(0, 0, 0)):
+        """Shows message by scrolling it over HAT screen."""
+
         self._sense_hat.rotation = 0
-        self._sense_hat.show_message(message, Config.SCROLL_TEXT_SPEED)
+        self._sense_hat.show_message(message, Config.SCROLL_TEXT_SPEED, message_color, background_color)
 
-    def _update_display(self, sensors_data):
+        # Clear the screen
+        self._sense_hat.clear()
+    
+    def _get_sensors_data(self):
+        """Returns sensors data tuple."""
+
+        temp_in_celsius = self.get_temperature()
+
+        return (
+            round(temp_in_celsius, 1), 
+            round(self.to_fahrenheit(temp_in_celsius), 1), 
+            round(self.get_humidity(), 0), 
+            round(self.get_pressure(), 1)
+        )    
+    
+    def _log_results(self, first_time=False):
+        """Continuously logs sensors values."""
+
+        if not first_time:
+            print('Temp: %sC (%sF), Humidity: %s%%, Pressure: %s inHg' % self._get_sensors_data())
+
+        self._log_timer = self._start_timer(Config.LOG_INTERVAL, self._log_results)
+
+    def _update_display(self, loop=True):
+        """Continuously updates screen with new sensors values."""
+
+        sensors_data = self._get_sensors_data()
+
         if self.current_item.entity_type is WeatherEntityType.TEMPERATURE:
             pixels = self.current_item.show_pixels(sensors_data[0])
         elif self.current_item.entity_type is WeatherEntityType.HUMIDITY:
@@ -135,60 +196,48 @@ class WeatherStation(CarouselContainer):
 
         self._sense_hat.set_rotation(self.current_style.rotation)
         self._sense_hat.set_pixels(pixels)
-    
-    def _get_sensors_data(self):
-        temp_in_celsius = self.get_temperature()
-        return (
-            round(temp_in_celsius, 1), 
-            round(self.to_fahrenheit(temp_in_celsius), 1), 
-            round(self.get_humidity(), 0), 
-            round(self.get_pressure(), 1)
-        )    
-    
-    def _log_results(self, first_time=True):
-        if not first_time:
-            print('Temp: %sC (%sF), Pressure: %s inHg, Humidity: %s%%' % self._get_sensors_data())
 
-        self._log_timer = Timer(Config.LOG_INTERVAL, self._log_results, [False])
-        self._log_timer.daemon = True
-        self._log_timer.start()
+        if loop:
+            self._update_timer = self._start_timer(Config.UPDATE_INTERVAL, self._update_display)
 
-    def _upload_results(self, first_time=True):
+    def _upload_results(self, first_time=False):
+        """Continuously uploads new sensors values to Weather Underground."""
+
         if not first_time:
+            print('Uploading data to Weather Underground')
             sensors_data = self._get_sensors_data()
-            self._update_display(sensors_data)
-            # ========================================================
-            # Upload the weather data to Weather Underground
-            # ========================================================
-            # is weather upload enabled (True)?
-            if Config.WEATHER_UPLOAD:
-                # From http://wiki.wunderground.com/index.php/PWS_-_Upload_Protocol
-                print('Uploading data to Weather Underground')
-                # build a weather data object
-                weather_data = {
-                    'action': 'updateraw',
-                    'ID': Config.STATION_ID,
-                    'PASSWORD': Config.STATION_KEY,
-                    'dateutc': 'now',
-                    'tempf': str(sensors_data[1]),
-                    'humidity': str(sensors_data[2]),
-                    'baromin': str(sensors_data[3]),
-                }
-                try:
-                    upload_url = Config.WU_URL + '?' + urlencode(weather_data)
-                    response = urllib2.urlopen(upload_url)
-                    html = response.read()
-                    print('Server response: ', html)
-                    # do something
-                    response.close()  # best practice to close the file
-                except:
-                    print('Exception: %s\n' % sys.exc_info()[0])
-            else:
-                print('Skipping Weather Underground upload')
 
-        self._upload_timer = Timer(Config.UPLOAD_INTERVAL, self._upload_results, [False])
-        self._upload_timer.daemon = True
-        self._upload_timer.start()
+            # Build a weather data object http://wiki.wunderground.com/index.php/PWS_-_Upload_Protocol
+            weather_data = {
+                'action': 'updateraw',
+                'ID': Config.STATION_ID,
+                'PASSWORD': Config.STATION_KEY,
+                'dateutc': 'now',
+                'tempf': str(sensors_data[1]),
+                'humidity': str(sensors_data[2]),
+                'baromin': str(sensors_data[3]),
+            }
+
+            try:
+                upload_url = Config.WU_URL + '?' + urlencode(weather_data)
+                response = urllib2.urlopen(upload_url)
+                html = response.read()
+                print('Server response: ', html)
+                
+                # Close response object
+                response.close()
+            except:
+                print('Could not upload to Weather Underground')
+                logging.warning('Could not upload to Weather Underground', exc_info=True)
+
+        self._upload_timer = self._start_timer(Config.UPLOAD_INTERVAL, self._upload_results)
+
+    def _start_timer(self, interval, callback):
+        timer = Timer(interval, callback)
+        timer.daemon = True
+        timer.start()
+
+        return timer
 
     def _get_cpu_temp(self):        
         # 'borrowed' from https://www.raspberrypi.org/forums/viewtopic.php?f=104&t=111457
@@ -201,64 +250,66 @@ class WeatherStation(CarouselContainer):
         # do we have the t object?
         if not self._last_readings:
             # then create it
-            self._last_readings = deque((value, ) * 3, self.SMOOTH_READINGS_NUMBER)
+            self._last_readings = deque((value, ) * self.SMOOTH_READINGS_NUMBER, self.SMOOTH_READINGS_NUMBER)
         else:
             # manage the rolling previous values
             self._last_readings.appendleft(value)
         # average the three last temperatures
         return sum(self._last_readings) / self.SMOOTH_READINGS_NUMBER
 
-# ============================================================================
-#  Read Weather Underground Configuration Parameters
-# ============================================================================
-print('\nInitializing Weather Underground configuration')
-if (Config.STATION_ID is None) or (Config.STATION_KEY is None):
-    print('Missing values from the Weather Underground configuration file\n')
-    sys.exit(1)
 
-# make sure we don't have a MEASUREMENT_INTERVAL > 60
-if (Config.UPLOAD_INTERVAL is None) or (Config.UPLOAD_INTERVAL > 600):
-    print("The application's 'MEASUREMENT_INTERVAL' cannot be empty or greater than 600")
-    sys.exit(1)
-
-# we made it this far, so it must have worked...
-print('Successfully read Weather Underground configuration values')
-print('Station ID: ', Config.STATION_ID)
-
-# ============================================================================
-# initialize the Sense HAT object
-# ============================================================================
-try:
-    print('Initializing the Sense HAT client')
-    sense = SenseHat()
-    # sense.set_rotation(180)
-    # then write some text to the Sense HAT's 'screen'
-    # sense.show_message('Init', text_colour=[255, 255, 0], back_colour=[0, 0, 255])
-    # clear the screen
-    sense.clear()
-    # get the current temp to use when checking the previous measurement
-    #last_temp = round(get_temp(), 1)
-    #print('Current temperature reading: ', last_temp, 'C')
-except:
-    print('Unable to initialize the Sense HAT library: ', sys.exc_info()[0])
-    sys.exit(1)
-
-print('Initialization complete!')
-
-# Now see what we're supposed to do next
+# Check prerequisites and launch Weather Station
 if __name__ == '__main__':
+    # Setup logger, to log warning/errors during execution
+    # Empty log file for each new entry
+    logging.basicConfig(
+        filename='/home/pi/weather_station/error.log',
+        filemode='w',
+        format='%(asctime)s %(levelname)s %(message)s', 
+        level=logging.WARNING
+    )
+
+    #  Read Weather Underground Configuration Parameters
+    print('\nInitializing Weather Underground configuration')
+    if Config.STATION_ID is None or Config.STATION_KEY is None:
+        print('Missing values from the Weather Underground configuration file\n')
+        logging.warning('Missing values from the Weather Underground configuration file')
+
+        sys.exit(1)
+
+    # Make sure we don't have an upload interval more than 3600 seconds
+    if Config.UPLOAD_INTERVAL > 3600:
+        print('The application\'s upload interval cannot be greater than 3600 seconds')
+        logging.warning('The application\'s upload interval cannot be greater than 3600 seconds')
+
+        sys.exit(1)
+
+    print('Successfully read Weather Underground configuration values')
+    print('Station ID: ', Config.STATION_ID)
+
+    station = None
+
+    def _terminate_application(signal=None, frame=None):
+        if station:
+            station.stop_station()
+
+        logging.warning('Application terminated', exc_info=not signal)
+
+        print('\nExiting application')
+        
+    signal.signal(signal.SIGTERM, _terminate_application)
+
     try:
-        station = WeatherStation(sense)
+        station = WeatherStation()
+
+        print('Initializing the Sense HAT client')
+        station.activate_sensors()
+        print('Initialization complete!')
+
         station.start_station()
-        pause()
+
+        signal.pause()
     except:
-        logging.basicConfig(
-            filename='./weather_station/error.log', 
-            filemode='w', 
-            format='%(asctime)s %(levelname)s %(message)s', 
-            level=logging.ERROR
-        )
-        logging.error('', exc_info=True)
-        station.stop_station();
-        print('\nExiting application\n')
+        _terminate_application()
+
         sys.exit(0)

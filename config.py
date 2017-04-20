@@ -9,7 +9,7 @@ class Config:
     # Runtime configuration
     WEATHER_UPLOAD = True
     UPLOAD_INTERVAL = 600 # in seconds
-    LOG_TO_CONSOLE = True
+    LOG_TO_CONSOLE = False
     LOG_INTERVAL = 5 # in seconds
     UPDATE_DISPLAY = True
     UPDATE_INTERVAL = 60 # in seconds
@@ -22,4 +22,4 @@ class Config:
     PRESS_POSITIVE = (148, 0, 211)  # purple
     PRESS_NEGATIVE = (255, 140, 0)   # orange
     SCROLL_TEXT = True
-    SCROLL_TEXT_SPEED = .06
+    SCROLL_TEXT_SPEED = .05
