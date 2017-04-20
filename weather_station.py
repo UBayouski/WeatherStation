@@ -9,6 +9,8 @@
     Completely configurable and working asyncroniously in multi threads. 
     Uses stick for choosing different weather entities and visual styles. 
     Uses logger to log runtime issues/errors.
+    
+    Inspired by http://makezine.com/projects/raspberry-pi-weather-station-mount/ project
 ********************************************************************************************************************'''
 from __future__ import print_function
 from collections import deque
@@ -98,43 +100,43 @@ class WeatherStation(CarouselContainer):
         return (value * 1.8) + 32
 
     def get_temperature(self):
-        """"""
-        # ====================================================================
-        # Unfortunately, getting an accurate temperature reading from the
-        # Sense HAT is improbable, see here:
-        # https://www.raspberrypi.org/forums/viewtopic.php?f=104&t=111457
-        # so we'll have to do some approximation of the actual temp
-        # taking CPU temp into account. The Pi foundation recommended
-        # using the following:
-        # http://yaab-arduino.blogspot.co.uk/2016/08/accurate-temperature-reading-sensehat.html
-        # ====================================================================
-        # First, get temp readings from both sensors
-        t1 = self._sense_hat.get_temperature_from_humidity()
-        t2 = self._sense_hat.get_temperature_from_pressure()
-        # t becomes the average of the temperatures from both sensors
-        t = (t1 + t2) / 2 if  t2 else t1
-        # Now, grab the CPU temperature
-        t_cpu = self._get_cpu_temp()
-        # Calculate the 'real' temperature compensating for CPU heating
-        t_corr = t - ((t_cpu - t) / 1.5)
-        # Finally, average out that value across the last three readings
-        t_corr = self._get_smooth(t_corr)
-        # convoluted, right?
-        # Return the calculated temperature
-        return t_corr
+        """
+        Gets temperature and adjusts it with environmental impacts (like cpu temperature).
+                
+        There are some issues, getting an accurate temperature reading from the
+        Sense HAT is improbable, see here:
+        https://www.raspberrypi.org/forums/viewtopic.php?f=104&t=111457
+        We need to take CPU temp into account. The Pi foundation recommendeds using the following:
+        http://yaab-arduino.blogspot.co.uk/2016/08/accurate-temperature-reading-sensehat.html        
+        """
+        
+        # Get temp readings from both sensors
+        humidity_temp = self._sense_hat.get_temperature_from_humidity()
+        pressure_temp = self._sense_hat.get_temperature_from_pressure()
+        
+        # avg_temp becomes the average of the temperatures from both sensors
+        # We need to check for pressure_temp value is not 0, to not ruin avg_temp calculation
+        avg_temp = (humidity_temp + pressure_temp) / 2 if pressure_temp else humidity_temp
+        
+        # Get the CPU temperature
+        cpu_temp = self._get_cpu_temp()
+        
+        # Calculate temperature compensating for CPU heating
+        adj_temp = avg_temp - (cpu_temp - avg_temp) / 1.5
+        
+        # Average out value across the last three readings
+        return self._get_smooth(adj_temp)
 
     def get_humidity(self):
         """Gets humidity sensor value."""
         return self._sense_hat.get_humidity()
 
     def get_pressure(self):
-        """
-        Gets humidity sensor value and converts pressure from millibars to inHg before posting.
-        """
+        """Gets humidity sensor value and converts pressure from millibars to inHg before posting."""
         return self._sense_hat.get_pressure() * 0.0295300
 
     def _change_weather_entity(self, event):
-        """Switches to next/previous weather entity or next/previous visual style."""
+        """Internal. Switches to next/previous weather entity or next/previous visual style."""
         
         # We need to handle release event state
         if event.action == ACTION_RELEASED:
@@ -154,7 +156,7 @@ class WeatherStation(CarouselContainer):
             self._update_display(loop=False)
 
     def _show_message(self, message, message_color, background_color=(0, 0, 0)):
-        """Shows message by scrolling it over HAT screen."""
+        """Internal. Shows message by scrolling it over HAT screen."""
 
         self._sense_hat.rotation = 0
         self._sense_hat.show_message(message, Config.SCROLL_TEXT_SPEED, message_color, background_color)
@@ -163,7 +165,7 @@ class WeatherStation(CarouselContainer):
         self._sense_hat.clear()
     
     def _get_sensors_data(self):
-        """Returns sensors data tuple."""
+        """Internal. Returns sensors data tuple."""
 
         temp_in_celsius = self.get_temperature()
 
@@ -175,7 +177,7 @@ class WeatherStation(CarouselContainer):
         )    
     
     def _log_results(self, first_time=False):
-        """Continuously logs sensors values."""
+        """Internal. Continuously logs sensors values."""
 
         if not first_time:
             print('Temp: %sC (%sF), Humidity: %s%%, Pressure: %s inHg' % self._get_sensors_data())
@@ -183,7 +185,7 @@ class WeatherStation(CarouselContainer):
         self._log_timer = self._start_timer(Config.LOG_INTERVAL, self._log_results)
 
     def _update_display(self, loop=True):
-        """Continuously updates screen with new sensors values."""
+        """Internal. Continuously updates screen with new sensors values."""
 
         sensors_data = self._get_sensors_data()
 
@@ -201,7 +203,7 @@ class WeatherStation(CarouselContainer):
             self._update_timer = self._start_timer(Config.UPDATE_INTERVAL, self._update_display)
 
     def _upload_results(self, first_time=False):
-        """Continuously uploads new sensors values to Weather Underground."""
+        """Internal. Continuously uploads new sensors values to Weather Underground."""
 
         if not first_time:
             print('Uploading data to Weather Underground')
@@ -233,28 +235,34 @@ class WeatherStation(CarouselContainer):
         self._upload_timer = self._start_timer(Config.UPLOAD_INTERVAL, self._upload_results)
 
     def _start_timer(self, interval, callback):
+        """Internal. Starts timer with given interval and callback function."""
+        
         timer = Timer(interval, callback)
         timer.daemon = True
         timer.start()
 
         return timer
 
-    def _get_cpu_temp(self):        
-        # 'borrowed' from https://www.raspberrypi.org/forums/viewtopic.php?f=104&t=111457
-        # executes a command at the OS to pull in the CPU temperature
+    def _get_cpu_temp(self):
+        """"
+        Internal.
+        Executes a command at the OS to pull in the CPU temperature.
+        Thanks to https://www.raspberrypi.org/forums/viewtopic.php?f=104&t=111457
+        """
+        
         res = os.popen('vcgencmd measure_temp').readline()
         return float(res.replace('temp=', '').replace("'C\n", ''))
 
-    # use moving average to smooth readings
     def _get_smooth(self, value):
-        # do we have the t object?
+        """Moving average to smooth reading."""
+        
+        # We use deque here as it is more efficient for in/out behaviour than regular list/tuple
         if not self._last_readings:
-            # then create it
             self._last_readings = deque((value, ) * self.SMOOTH_READINGS_NUMBER, self.SMOOTH_READINGS_NUMBER)
         else:
-            # manage the rolling previous values
             self._last_readings.appendleft(value)
-        # average the three last temperatures
+            
+        # Average last temperature readings
         return sum(self._last_readings) / self.SMOOTH_READINGS_NUMBER
 
 
@@ -270,7 +278,7 @@ if __name__ == '__main__':
     )
 
     #  Read Weather Underground Configuration Parameters
-    print('\nInitializing Weather Underground configuration')
+    print('\nLaunching Weather Station')
     if Config.STATION_ID is None or Config.STATION_KEY is None:
         print('Missing values from the Weather Underground configuration file\n')
         logging.warning('Missing values from the Weather Underground configuration file')
@@ -287,9 +295,13 @@ if __name__ == '__main__':
     print('Successfully read Weather Underground configuration values')
     print('Station ID: ', Config.STATION_ID)
 
+    # We need to declare this variable for case station was not instantiated
     station = None
 
     def _terminate_application(signal=None, frame=None):
+        """Nested. Internal. Tries to terminate weather station and make a clean up."""
+        
+        # We need to check if station was initialized
         if station:
             station.stop_station()
 
@@ -297,16 +309,17 @@ if __name__ == '__main__':
 
         print('\nExiting application')
         
+    # Subscribe to signals events
     signal.signal(signal.SIGTERM, _terminate_application)
 
     try:
         station = WeatherStation()
 
-        print('Initializing the Sense HAT client')
         station.activate_sensors()
-        print('Initialization complete!')
+        print('Successfully initialized sensors')
 
         station.start_station()
+        print('Weather Station successfully launched')
 
         signal.pause()
     except:
