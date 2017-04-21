@@ -34,6 +34,7 @@ class WeatherStation(CarouselContainer):
 
     # Constants
     SMOOTH_READINGS_NUMBER = 3
+    READINGS_PRINT_TEMPLATE = 'Temp: %sC (%sF), Humidity: %s%%, Pressure: %s inHg'
 
     def __init__(self):
         super(WeatherStation, self).__init__()
@@ -134,6 +135,18 @@ class WeatherStation(CarouselContainer):
     def get_pressure(self):
         """Gets humidity sensor value and converts pressure from millibars to inHg before posting."""
         return self._sense_hat.get_pressure() * 0.0295300
+    
+    def get_sensors_data(self):
+        """Returns sensors data tuple."""
+
+        temp_in_celsius = self.get_temperature()
+
+        return (
+            round(temp_in_celsius, 1), 
+            round(self.to_fahrenheit(temp_in_celsius), 1), 
+            round(self.get_humidity(), 0), 
+            round(self.get_pressure(), 1)
+        )    
 
     def _change_weather_entity(self, event):
         """Internal. Switches to next/previous weather entity or next/previous visual style."""
@@ -158,36 +171,22 @@ class WeatherStation(CarouselContainer):
     def _show_message(self, message, message_color, background_color=(0, 0, 0)):
         """Internal. Shows message by scrolling it over HAT screen."""
 
+        # Need to be sure we revert any changes to rotation
         self._sense_hat.rotation = 0
         self._sense_hat.show_message(message, Config.SCROLL_TEXT_SPEED, message_color, background_color)
-
-        # Clear the screen
-        self._sense_hat.clear()
-    
-    def _get_sensors_data(self):
-        """Internal. Returns sensors data tuple."""
-
-        temp_in_celsius = self.get_temperature()
-
-        return (
-            round(temp_in_celsius, 1), 
-            round(self.to_fahrenheit(temp_in_celsius), 1), 
-            round(self.get_humidity(), 0), 
-            round(self.get_pressure(), 1)
-        )    
     
     def _log_results(self, first_time=False):
         """Internal. Continuously logs sensors values."""
 
         if not first_time:
-            print('Temp: %sC (%sF), Humidity: %s%%, Pressure: %s inHg' % self._get_sensors_data())
+            print(self.READINGS_PRINT_TEMPLATE % self.get_sensors_data())
 
         self._log_timer = self._start_timer(Config.LOG_INTERVAL, self._log_results)
 
     def _update_display(self, loop=True):
         """Internal. Continuously updates screen with new sensors values."""
 
-        sensors_data = self._get_sensors_data()
+        sensors_data = self.get_sensors_data()
 
         if self.current_item.entity_type is WeatherEntityType.TEMPERATURE:
             pixels = self.current_item.show_pixels(sensors_data[0])
@@ -207,7 +206,7 @@ class WeatherStation(CarouselContainer):
 
         if not first_time:
             print('Uploading data to Weather Underground')
-            sensors_data = self._get_sensors_data()
+            sensors_data = self.get_sensors_data()
 
             # Build a weather data object http://wiki.wunderground.com/index.php/PWS_-_Upload_Protocol
             weather_data = {
@@ -230,7 +229,7 @@ class WeatherStation(CarouselContainer):
                 response.close()
             except:
                 print('Could not upload to Weather Underground')
-                logging.warning('Could not upload to Weather Underground', exc_info=True)
+                logging.warning('\nCould not upload to Weather Underground', exc_info=True)
 
         self._upload_timer = self._start_timer(Config.UPLOAD_INTERVAL, self._upload_results)
 
@@ -278,34 +277,30 @@ if __name__ == '__main__':
     )
 
     #  Read Weather Underground Configuration Parameters
-    print('\nLaunching Weather Station')
     if Config.STATION_ID is None or Config.STATION_KEY is None:
         print('Missing values from the Weather Underground configuration file\n')
-        logging.warning('Missing values from the Weather Underground configuration file')
+        logging.warning('\nMissing values from the Weather Underground configuration file')
 
         sys.exit(1)
 
     # Make sure we don't have an upload interval more than 3600 seconds
     if Config.UPLOAD_INTERVAL > 3600:
         print('The application\'s upload interval cannot be greater than 3600 seconds')
-        logging.warning('The application\'s upload interval cannot be greater than 3600 seconds')
+        logging.warning('\nThe application\'s upload interval cannot be greater than 3600 seconds')
 
         sys.exit(1)
 
     print('Successfully read Weather Underground configuration values')
     print('Station ID: ', Config.STATION_ID)
 
-    # We need to declare this variable for case station was not instantiated
-    station = None
-
     def _terminate_application(signal=None, frame=None):
         """Nested. Internal. Tries to terminate weather station and make a clean up."""
-        
+
         # We need to check if station was initialized
-        if station:
+        if 'station' in globals():
             station.stop_station()
 
-        logging.warning('Application terminated', exc_info=not signal)
+        logging.warning('\nApplication terminated', exc_info=not signal)
 
         print('\nExiting application')
         
@@ -317,6 +312,7 @@ if __name__ == '__main__':
 
         station.activate_sensors()
         print('Successfully initialized sensors')
+        print(station.READINGS_PRINT_TEMPLATE % station.get_sensors_data())
 
         station.start_station()
         print('Weather Station successfully launched')
