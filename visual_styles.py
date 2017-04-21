@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''*****************************************************************************************************************
     Raspberry Pi + Raspbian Weather Station
     By Uladzislau Bayouski
