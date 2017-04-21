@@ -1,3 +1,11 @@
+'''*****************************************************************************************************************
+    Raspberry Pi + Raspbian Weather Station
+    By Uladzislau Bayouski
+    https://www.linkedin.com/in/uladzislau-bayouski-a7474111b/
+    
+    Configuration package.
+********************************************************************************************************************'''
+
 class Config:
     """Configuration class for Weather Station"""
 
