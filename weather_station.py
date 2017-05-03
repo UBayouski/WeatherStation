@@ -5,8 +5,8 @@
     https://www.linkedin.com/in/uladzislau-bayouski-a7474111b/
 
     A Raspberry Pi based weather station that measures temperature, humidity and pressure using
-    the Astro Pi Sense HAT then uploads the data to a Weather Underground weather station. 
-    Completely configurable and working asyncroniously in multi threads. 
+    the Astro Pi Sense HAT then uploads the data to a Weather Underground weather station.
+    Calculates dew point. Completely configurable and working asyncroniously in multi threads. 
     Uses stick for choosing different weather entities and visual styles. 
     Uses logger to log runtime issues/errors.
     
@@ -99,6 +99,14 @@ class WeatherStation(CarouselContainer):
     def to_fahrenheit(value):
         """Converts celsius temperature to fahrenheit."""
         return (value * 1.8) + 32
+
+    @staticmethod
+    def calculate_dew_point(temp, hum):
+        """
+        Calculates dewpoint in celsius, uses simplified formula less accurate but obvious.
+        https://en.wikipedia.org/wiki/Dew_point#Calculating_the_dew_point
+        """
+        return temp - (100 - hum) / 5
 
     def get_temperature(self):
         """
@@ -217,6 +225,7 @@ class WeatherStation(CarouselContainer):
                 'tempf': str(sensors_data[1]),
                 'humidity': str(sensors_data[2]),
                 'baromin': str(sensors_data[3]),
+                'dewptf': str(self.to_fahrenheit(self.calculate_dew_point(sensors_data[1], sensors_data[2])))
             }
 
             try:
@@ -268,10 +277,8 @@ class WeatherStation(CarouselContainer):
 # Check prerequisites and launch Weather Station
 if __name__ == '__main__':
     # Setup logger, to log warning/errors during execution
-    # Empty log file for each new entry
     logging.basicConfig(
         filename='/home/pi/weather_station/error.log',
-        filemode='w',
         format='%(asctime)s %(levelname)s %(message)s', 
         level=logging.WARNING
     )
