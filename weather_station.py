@@ -225,7 +225,7 @@ class WeatherStation(CarouselContainer):
                 'tempf': str(sensors_data[1]),
                 'humidity': str(sensors_data[2]),
                 'baromin': str(sensors_data[3]),
-                'dewptf': str(self.to_fahrenheit(self.calculate_dew_point(sensors_data[1], sensors_data[2])))
+                'dewptf': str(self.to_fahrenheit(self.calculate_dew_point(sensors_data[0], sensors_data[2])))
             }
 
             try:
@@ -238,7 +238,7 @@ class WeatherStation(CarouselContainer):
                 response.close()
             except:
                 print('Could not upload to Weather Underground')
-                logging.warning('\nCould not upload to Weather Underground', exc_info=True)
+                logging.warning('Could not upload to Weather Underground', exc_info=True)
 
         self._upload_timer = self._start_timer(Config.UPLOAD_INTERVAL, self._upload_results)
 
@@ -279,21 +279,21 @@ if __name__ == '__main__':
     # Setup logger, to log warning/errors during execution
     logging.basicConfig(
         filename='/home/pi/weather_station/error.log',
-        format='%(asctime)s %(levelname)s %(message)s', 
+        format='\r\n%(asctime)s %(levelname)s %(message)s', 
         level=logging.WARNING
     )
 
     #  Read Weather Underground Configuration Parameters
     if Config.STATION_ID is None or Config.STATION_KEY is None:
         print('Missing values from the Weather Underground configuration file\n')
-        logging.warning('\nMissing values from the Weather Underground configuration file')
+        logging.warning('Missing values from the Weather Underground configuration file')
 
         sys.exit(1)
 
     # Make sure we don't have an upload interval more than 3600 seconds
     if Config.UPLOAD_INTERVAL > 3600:
         print('The application\'s upload interval cannot be greater than 3600 seconds')
-        logging.warning('\nThe application\'s upload interval cannot be greater than 3600 seconds')
+        logging.warning('The application\'s upload interval cannot be greater than 3600 seconds')
 
         sys.exit(1)
 
@@ -307,7 +307,7 @@ if __name__ == '__main__':
         if 'station' in globals():
             station.stop_station()
 
-        logging.warning('\nApplication terminated', exc_info=not signal)
+        logging.warning('Application terminated', exc_info=not signal)
 
         print('\nExiting application')
         
