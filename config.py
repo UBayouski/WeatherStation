@@ -10,8 +10,8 @@ class Config:
     """Configuration class for Weather Station"""
 
     # Weather Undeground configuration
-    STATION_ID = 'KCASANJO674'
-    STATION_KEY = 'mfycfvvg'
+    STATION_ID = 'YOUR_STATION_ID'
+    STATION_KEY = 'YOUR_STATION_KEY'
     WU_URL = 'http://weatherstation.wunderground.com/weatherstation/updateweatherstation.php'
 
     # Runtime configuration
