@@ -130,14 +130,8 @@ class WeatherStation(CarouselContainer):
         # Get the CPU temperature
         cpu_temp = self._get_cpu_temp()
         
-        # Calculate temperature compensation for CPU heating
-        # Depending on Raspberry Pi model (2, 3 etc.) and case you may try different formulas
-        # The commented option below is recommended for Raspberry Pi 3 by: 
-        # http://yaab-arduino.blogspot.co.uk/2016/08/accurate-temperature-reading-sensehat.html
-        # adj_temp = avg_temp - (cpu_temp - avg_temp) / 1.5
-
-        # However I found this one more efficient and used it for Raspberry Pi 2 and Zebra case:
-        adj_temp = cpu_temp - avg_temp / 2
+        # Calculate temperature compensating for CPU heating
+        adj_temp = avg_temp - (cpu_temp - avg_temp) / 1.5
         
         # Average out value across the last three readings
         return self._get_smooth(adj_temp)
@@ -244,7 +238,7 @@ class WeatherStation(CarouselContainer):
                 response.close()
             except:
                 print('Could not upload to Weather Underground')
-                logging.warning('Could not upload to Weather Underground\r\nWeather Data: %s\r\nUpload URL: %s', weather_data, upload_url, exc_info=True)
+                logging.warning('Could not upload to Weather Underground', exc_info=True)
 
         self._upload_timer = self._start_timer(Config.UPLOAD_INTERVAL, self._upload_results)
 
