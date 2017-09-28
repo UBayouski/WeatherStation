@@ -19,4 +19,4 @@ Uses stick for choosing different weather entities and visual styles.
 Uses logger to log runtime issues/errors.
 
 
-Inspired by http://makezine.com/projects/raspberry-pi-weather-station-mount/ project
+Inspired by http://makezine.com/projects/raspberry-pi-weather-station-mount/ project.
