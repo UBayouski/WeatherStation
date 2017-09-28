@@ -1,8 +1,11 @@
 # Weather Station
 
-Raspberry Pi + Raspbian Weather Station 
-By Uladzislau Bayouski 
+Raspberry Pi + Raspbian Weather Station
+
+By Uladzislau Bayouski
+
 https://www.linkedin.com/in/uladzislau-bayouski-a7474111b/
+
 
 A Raspberry Pi based weather station that measures temperature, humidity and pressure using 
 the Astro Pi Sense HAT then uploads the data to a Weather Underground weather station. 
