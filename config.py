@@ -1,4 +1,4 @@
-'''*****************************************************************************************************************
+ '''*****************************************************************************************************************
     Raspberry Pi + Raspbian Weather Station
     By Uladzislau Bayouski
     https://www.linkedin.com/in/uladzislau-bayouski-a7474111b/
@@ -9,13 +9,13 @@
 class Config:
     """Configuration class for Weather Station"""
 
-    # Weather Undeground configuration
+    # Weather Underground configuration
     STATION_ID = 'KCASANJO674'
     STATION_KEY = 'mfycfvvg'
     WU_URL = 'http://weatherstation.wunderground.com/weatherstation/updateweatherstation.php'
 
     # Runtime configuration
-    WEATHER_UPLOAD = True
+    WEATHER_UPLOAD = True # Set to False when testing the code and/or hardware and don't want to upload data to Weather Underground
     UPLOAD_INTERVAL = 600 # in seconds
     LOG_TO_CONSOLE = False
     LOG_INTERVAL = 5 # in seconds
