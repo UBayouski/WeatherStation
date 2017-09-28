@@ -1,11 +1,16 @@
 # Weather Station
 
 
+
+
 Raspberry Pi + Raspbian Weather Station
 
 By Uladzislau Bayouski
 
 https://www.linkedin.com/in/uladzislau-bayouski-a7474111b/
+
+
+
 
 
 
@@ -18,6 +23,9 @@ Calculates dew point. Completely configurable and working asyncroniously in mult
 Uses stick for choosing different weather entities and visual styles.
 
 Uses logger to log runtime issues/errors.
+
+
+
 
 
 
