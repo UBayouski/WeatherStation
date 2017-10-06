@@ -6,8 +6,6 @@
     Configuration package.
 ********************************************************************************************************************'''
 
-from plugins.dyson_pure_link import DysonPureLink
-
 class Config:
     """Configuration class for Weather Station"""
 
