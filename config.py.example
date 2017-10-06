@@ -33,4 +33,4 @@ class Config:
     SCROLL_TEXT_SPEED = .05
 
     # Plugins section
-    PLUGINS = None
+    PLUGINS = []
