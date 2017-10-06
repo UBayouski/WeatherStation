@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 '''*****************************************************************************************************************
     Raspberry Pi + Raspbian Weather Station
     By Uladzislau Bayouski
@@ -12,6 +13,7 @@
     
     Inspired by http://makezine.com/projects/raspberry-pi-weather-station-mount/ project.
 ********************************************************************************************************************'''
+
 from __future__ import print_function
 from collections import deque
 from sense_hat import SenseHat, ACTION_RELEASED, DIRECTION_UP, DIRECTION_DOWN, DIRECTION_LEFT, DIRECTION_RIGHT
@@ -138,6 +140,8 @@ class WeatherStation(CarouselContainer):
 
         # However I found this one more efficient and used it for Raspberry Pi 2 and Zebra case:
         adj_temp = cpu_temp - avg_temp / 2
+
+        print('CPU temp: %s, Avg temp: %s, Adj temp: %s' % (cpu_temp, avg_temp, adj_temp))
         
         # Average out value across the last three readings
         return self._get_smooth(adj_temp)
@@ -219,7 +223,6 @@ class WeatherStation(CarouselContainer):
         """Internal. Continuously uploads new sensors values to Weather Underground."""
 
         if not first_time:
-            print('Uploading data to Weather Underground')
             sensors_data = self.get_sensors_data()
 
             # Build a weather data object http://wiki.wunderground.com/index.php/PWS_-_Upload_Protocol
@@ -234,7 +237,21 @@ class WeatherStation(CarouselContainer):
                 'dewptf': str(self.to_fahrenheit(self.calculate_dew_point(sensors_data[0], sensors_data[2])))
             }
 
+            for plugin in Config.PLUGINS:
+                print('Starting %s' % plugin.plugin_name)
+
+                try:
+                    data = plugin.get_data()
+
+                    for error in plugin.errors:
+                        logging.warning('%s got an error: %s', plugin.plugin_name, error.message)
+
+                    weather_data.update(data)
+                except:
+                    logging.warning('Unexpected error occured in %s', plugin.plugin_name, exc_info=True)
+
             try:
+                print('Uploading data to Weather Underground')
                 upload_url = Config.WU_URL + '?' + urlencode(weather_data)
                 response = urllib2.urlopen(upload_url)
                 html = response.read()

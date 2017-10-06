@@ -48,3 +48,8 @@ Temporary Items
 
 # Visual Studion
 *.pyproj
+
+# Specific Project Files
+plugins/dyson_pure_link.yaml
+error.log
+config.py
