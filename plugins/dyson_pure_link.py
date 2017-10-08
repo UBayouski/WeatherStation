@@ -7,13 +7,20 @@ from base_plugin import BasePlugin
 """Mappings and enums like"""
 
 # Map for connection return code and its meaning
-MQTT_RETURN_CODES = {
+CONNECTION_STATE = {
     0: 'Connection successful',
-    1: 'Connection refused - incorrect protocol version',
-    2: 'Connection refused - invalid client identifier',
-    3: 'Connection refused - server unavailable',
-    4: 'Connection refused - bad username or password',
-    5: 'Connection refused - not authorised'
+    1: 'Connection refused: incorrect protocol version',
+    2: 'Connection refused: invalid client identifier',
+    3: 'Connection refused: server unavailable',
+    4: 'Connection refused: bad username or password',
+    5: 'Connection refused: not authorised',
+    99: 'Connection refused: timeout'
+}
+
+DISCONNECTION_STATE = {
+    0: 'Disconnection successful',
+    50: 'Disconnection error: unexpected error',
+    99: 'Disconnection error: timeout'
 }
 
 class FanMode(object):
@@ -34,15 +41,15 @@ class StandbyMonitoring(object):
 class ConnectionError(Exception):
     """Custom error to handle connect device issues"""
 
-    def __init__(self, message, *args):
+    def __init__(self, return_code, *args):
         super(ConnectionError, self).__init__(*args)
-        self.message = message
+        self.message = CONNECTION_STATE[return_code]
 
 class DisconnectionError(Exception):
     """Custom error to handle disconnect device issues"""
     def __init__(self, return_code, *args):
         super(DisconnectionError, self).__init__(*args)
-        self.message = 'Unexpected disconnect error: {}'.format(return_code)
+        self.message = DISCONNECTION_STATE[return_code] if return_code in DISCONNECTION_STATE else DISCONNECTION_STATE[50]
 
 class DataRetrieveError(Exception):
     """Custom error to handle retrieve data from device"""
@@ -68,7 +75,6 @@ class SensorsData(object):
 
     def __repr__(self):
         """Return a String representation"""
-
         return 'Temperature: {0} F, Humidity: {1} %, Volatile Compounds: {2}, Particles: {3}'.format(
             self.temperature, self.humidity, self.volatile_compounds, self.particles)
 
@@ -101,7 +107,6 @@ class StateData(object):
 
     def __repr__(self):
         """Return a String representation"""
-
         return 'Fan mode: {0}, Oscillation: {1}, Filter life: {2}, Standby monitoring: {3}'.format(
             self.fan_mode, self.oscillation, self.filter_life, self.standby_monitoring)
 
@@ -174,7 +179,7 @@ class DysonPureLink(BasePlugin):
         # Connection is successful with return_code: 0
         if return_code:
             userdata.connected.put_nowait(False)
-            self.errors.append(ConnectionError(MQTT_RETURN_CODES[return_code]))
+            self.errors.append(ConnectionError(return_code))
 
         # We subscribe to the status message
         client.subscribe(userdata.device_status)
@@ -236,6 +241,11 @@ class DysonPureLink(BasePlugin):
         
 
     def connect_device(self):
+        """
+        Connects to device using provided connection arguments
+
+        Returns: True/False depending on the result of connection
+        """
         if not self.config:
             self.parse_config()
 
@@ -247,26 +257,31 @@ class DysonPureLink(BasePlugin):
         self.client.connect(self.ip_address, port=self.port_number)
         self.client.loop_start()
 
-        if self.connected.get(timeout=10):
-            self._request_state()
+        try:
+            if self.connected.get(timeout=10):
+                self._request_state()
 
-            try:
-                self.state_data = self.state_data_available.get(timeout=5)
-                self.sensor_data = self.sensor_data_available.get(timeout=5)
+                try:
+                    self.state_data = self.state_data_available.get(timeout=5)
+                    self.sensor_data = self.sensor_data_available.get(timeout=5)
 
-                # Return True in case of successful connect and data retrieval
-                return True
-            except Empty:
-                self.errors.append(DataRetrieveError())
+                    # Return True in case of successful connect and data retrieval
+                    return True
+                except Empty:
+                    self.errors.append(DataRetrieveError())
+        except Empty:
+            self.errors.append(ConnectionError(99))
 
         # If any issue occurred return False
         self.client = None
         return False
 
     def set_fan_mode(self, mode):
+        """Changes fan mode: ON|OFF|AUTO"""
         self._change_state({'fmod': mode})
 
     def set_standby_monitoring(self, mode):
+        """Changes standby monitoring: ON|OFF"""
         self._change_state({'rhtm': mode})
 
     def get_data(self):
@@ -286,9 +301,14 @@ class DysonPureLink(BasePlugin):
         return result
 
     def disconnect_device(self):
+        """Disconnects device and return the boolean result"""
         if self.client:
             self.client.loop_stop()
             self.client.disconnect()
             
             # Wait until we get on disconnect message
-            self.disconnected.get(timeout=5)
+            try:
+                return self.disconnected.get(timeout=5)
+            except Empty:
+                self.errors.append(DisconnectionError(99))
+                return False
