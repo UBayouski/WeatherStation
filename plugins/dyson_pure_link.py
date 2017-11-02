@@ -88,7 +88,7 @@ class SensorsData(object):
 
     @staticmethod
     def kelvin_to_fahrenheit (kelvin_value):
-        return kelvin_value * 9 / 5 - 459.67
+        return round(kelvin_value * 9 / 5 - 459.67, 2)
 
 class StateData(object):
     """Value type for state data"""
@@ -132,6 +132,10 @@ class DysonPureLink(BasePlugin):
         self.sensor_data_available = Queue()
         self.sensor_data = None
         self.state_data = None
+
+        # In case sensors were disabled we upload previous readings
+        # Required for Weather Underground data consistency
+        self.previous_data = None
 
     @property
     def plugin_name(self):
@@ -213,7 +217,7 @@ class DysonPureLink(BasePlugin):
                     'msg': 'REQUEST-CURRENT-STATE',
                     'time': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
             
-            self.client.publish(self.device_command, command);
+            self.client.publish(self.device_command, command)
 
     def _change_state(self, data):
         """Publishes request for change state message"""
@@ -287,14 +291,20 @@ class DysonPureLink(BasePlugin):
     def get_data(self):
         result = {}
 
-        if self.connect_device() and self.has_valid_data:
-            
-            # Dictionary data for Weather Underground upload  
-            if self.sensor_data.temperature is not None:
-                result['indoortempf'] = self.sensor_data.temperature
+        if self.connect_device():
+            if self.has_valid_data:
+                # Dictionary data for Weather Underground upload  
+                if self.sensor_data.temperature is not None:
+                    result['indoortempf'] = self.sensor_data.temperature
 
-            if self.sensor_data.humidity is not None:
-                result['indoorhumidity'] = self.sensor_data.humidity
+                if self.sensor_data.humidity is not None:
+                    result['indoorhumidity'] = self.sensor_data.humidity
+                
+                # Update previous readings value
+                self.previous_data = result
+            else:
+                # If humidity and temperature are None, return previous value
+                result = self.previous_data
 
         self.disconnect_device()
 

@@ -139,7 +139,7 @@ class WeatherStation(CarouselContainer):
         # adj_temp = avg_temp - (cpu_temp - avg_temp) / 1.5
 
         # However I found this one more efficient and used it for Raspberry Pi 2 and Zebra case:
-        adj_temp = cpu_temp - avg_temp / 2
+        adj_temp = avg_temp - (cpu_temp - avg_temp) / 0.67
 
         print('\033[92mCPU temp: %s, Avg temp: %s, Adj temp: %s\033[0m' % (cpu_temp, avg_temp, adj_temp))
         
@@ -232,15 +232,14 @@ class WeatherStation(CarouselContainer):
                 'ID': Config.STATION_ID,
                 'PASSWORD': Config.STATION_KEY,
                 'dateutc': 'now',
-                'tempf': str(sensors_data[1]),
-                'humidity': str(sensors_data[2]),
-                'baromin': str(sensors_data[3]),
-                'dewptf': str(self.to_fahrenheit(self.calculate_dew_point(sensors_data[0], sensors_data[2])))
+                'tempf': sensors_data[1],
+                'humidity': sensors_data[2],
+                'baromin': sensors_data[3],
+                'dewptf': self.to_fahrenheit(self.calculate_dew_point(sensors_data[0], sensors_data[2]))
             }
 
-            for plugin_ref in Config.PLUGINS:
+            for plugin in Config.PLUGINS:
                 try:
-                    plugin = plugin_ref()
                     data = plugin.get_data()
 
                     for error in plugin.errors:
