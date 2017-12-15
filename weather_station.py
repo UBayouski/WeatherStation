@@ -139,7 +139,7 @@ class WeatherStation(CarouselContainer):
         # adj_temp = avg_temp - (cpu_temp - avg_temp) / 1.5
 
         # However I found this one more efficient and used it for Raspberry Pi 2 and Zebra case:
-        adj_temp = avg_temp - (cpu_temp - avg_temp) / 0.67
+        adj_temp = avg_temp - (cpu_temp - avg_temp) / 0.69
 
         print('\033[92mCPU temp: %s, Avg temp: %s, Adj temp: %s\033[0m' % (cpu_temp, avg_temp, adj_temp))
         

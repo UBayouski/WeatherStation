@@ -170,6 +170,10 @@ class DysonPureLink(BasePlugin):
         return self.config['DYSON_PORT']
 
     @property
+    def connectivity_timeout(self):
+        return self.config['CONNECTIVITY_TIMEOUT']
+
+    @property
     def device_command(self):
         return '{0}/{1}/command'.format(self.device_type, self.serial_number)
 
@@ -262,7 +266,7 @@ class DysonPureLink(BasePlugin):
         self.client.loop_start()
 
         try:
-            if self.connected.get(timeout=10):
+            if self.connected.get(timeout=self.connectivity_timeout):
                 self._request_state()
 
                 try:
