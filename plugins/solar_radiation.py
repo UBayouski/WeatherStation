@@ -155,15 +155,18 @@ class SolarRadiation(BasePlugin):
         """
         if (self.config and (not self.sunrise or not self.sunset or not self.is_date_today)):
             self._today = self.current_date.date()
-            response = urllib.urlopen(self.sunrise_sunset_url)
-            data = json.loads(response.read())
-            result = data['results']
-            sunrise = result['sunrise']
-            sunset = result['sunset']
+            try:
+                response = urllib.urlopen(self.sunrise_sunset_url)
+                data = json.loads(response.read())
+                result = data['results']
+                sunrise = result['sunrise']
+                sunset = result['sunset']
 
-            # Convert to provided in config timezone, as API returns in UTC by default
-            self.sunrise = dateutil.parser.parse(sunrise).astimezone(self.timezone)
-            self.sunset = dateutil.parser.parse(sunset).astimezone(self.timezone)
+                # Convert to provided in config timezone, as API returns in UTC by default
+                self.sunrise = dateutil.parser.parse(sunrise).astimezone(self.timezone)
+                self.sunset = dateutil.parser.parse(sunset).astimezone(self.timezone)
+            except Exception as error:
+                self.errors.append(error)
         
         return (self.sunrise, self.sunset)
 
