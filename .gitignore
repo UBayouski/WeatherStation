@@ -50,7 +50,7 @@ Temporary Items
 *.pyproj
 
 # Specific Project Files
-plugins/dyson_pure_link.yaml
+plugins/*.yaml
 error.log
 config.py
 *.pyc
