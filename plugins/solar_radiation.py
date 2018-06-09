@@ -190,8 +190,14 @@ class SolarRadiation(BasePlugin):
         return None
 
     def get_data(self):
+        result = {}
         if not self.config:
             self.parse_config()
-        self.get_sunrise_sunset()
+
         # Dictionary data for Weather Underground upload
-        return {'solarradiation': self.calcluate_solar_radiation()} if self.has_valid_data else {}
+        if self.has_valid_data:
+            solar_radiation = self.calcluate_solar_radiation()
+            if solar_radiation is not None:
+                result['solarradiation'] = solar_radiation
+
+        return result
