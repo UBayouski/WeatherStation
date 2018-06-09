@@ -191,6 +191,7 @@ class SolarRadiation(BasePlugin):
 
     def get_data(self):
         result = {}
+
         if not self.config:
             self.parse_config()
 
