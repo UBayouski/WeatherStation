@@ -20,7 +20,7 @@ class SolarRadiation(BasePlugin):
 
     @property
     def has_valid_data(self):
-        return self.config and self.sunrise and self.sunset
+        return self.sunrise and self.sunset
 
     @property
     def config_file_name(self):
@@ -111,8 +111,8 @@ class SolarRadiation(BasePlugin):
         declination_angle = math.radians(SolarRadiation.declination_angle(day));
         hour_angle = math.radians(SolarRadiation.hour_angle(hour));
         elevation_angle = SolarRadiation.elevation_angle(hour_angle, declination_angle, latitude)
-        declanation = math.radians(90) - elevation_angle;
-        return 1 / (1E-4 + math.cos(declanation))
+        declination = math.radians(90) - elevation_angle;
+        return 1 / (1E-4 + math.cos(declination))
 
     @staticmethod
     def hour_angle(hour):
@@ -190,6 +190,8 @@ class SolarRadiation(BasePlugin):
                 # http://www.pveducation.org/pvcdrom/average-solar-radiation
                 return 0 if result > 1100 else result
 
+            return 0
+
         return None
 
     def get_data(self):
@@ -199,9 +201,8 @@ class SolarRadiation(BasePlugin):
             self.parse_config()
 
         # Dictionary data for Weather Underground upload
-        if self.has_valid_data:
-            solar_radiation = self.calcluate_solar_radiation()
-            if solar_radiation is not None:
-                result['solarradiation'] = solar_radiation
+        solar_radiation = self.calcluate_solar_radiation()
+        if self.has_valid_data and solar_radiation is not None:
+            result['solarradiation'] = round(solar_radiation, 1)
 
         return result
